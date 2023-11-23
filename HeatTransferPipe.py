@@ -5,6 +5,8 @@
 
 # IMPORT STATEMENTS
 import math
+import matplotlib.pyplot as plt
+import numpy as np
 
 
 
@@ -26,15 +28,15 @@ SAFETEMP_CANVAS = 113 #safe-to-touch temperature for canvas jacket in F
 #----------------------------- PART A -------------------------------------------------
 
 #CALCULATION FUNCTION
-def calc_surf_temp(emiss):
+def calc_surf_temp(emiss, ins, fl_temp):
     #this component of the equation is 0 = coeff_nums[0]*x^4 + coeff_nums[1]*x^3 + coeff_nums[2]*x^2 + coeff_nums[3]*x + coeff_nums[4]
     #where x will be T2
     coeff_nums = [0.0, 0.0, 0.0, 0.0, 0.0]
 
     #variables
-    fluid_temp_F = TEMPS_ARR[3]
+    fluid_temp_F = fl_temp
     pipe_OD = PIPE_OD/12
-    ins_thickness = INS_THICKNESS_ARR[0]/12
+    ins_thickness = ins/12
     temp_enviro_F = TEMP_ENVIRO
     temp_enviro_R = TEMP_ENVIRO + 459.67
 
@@ -54,10 +56,9 @@ def calc_surf_temp(emiss):
         i += 1
     
     #solve the equation
-    #debug print out the equation: print(str(coeff_nums[0]) + "*T^4 + " + str(coeff_nums[1]) + "*T^3 + " + str(coeff_nums[2]) + "*T^2 + " + str(coeff_nums[3]) + "*T + " + str(coeff_nums[4]) + " + " + str(conv_coeff) + "*((T-70)^1.25) = 0")
     T2 = solve_eqn(coeff_nums[0], coeff_nums[1], coeff_nums[2], coeff_nums[3], coeff_nums[4], conv_coeff, temp_enviro_F, fluid_temp_F)
-    print("Fluid temperature = " + str(fluid_temp_F) + " F | Pipe OD = " + str(PIPE_OD) + " in = " + str(round(pipe_OD, 2)) + " ft | Insulation thickness " + str(INS_THICKNESS_ARR[0]) + " in = " + str(round(ins_thickness, 2)) + " ft | Jacket emissivity = " + str(emiss) + " | Outer temperature = " + str(round(T2, 2)) + " F") 
-
+    
+    return T2 #return statement
 
 #simple binary search algorithm to solve for the temperature
 def solve_eqn(c1, c2, c3, c4, c5, c6, low, high):
@@ -107,6 +108,66 @@ def calc_rad_coeff(d2, e, o, T3):
 
 #---------------------------- PART B --------------------------------------------
 
+def full_dataplot():
+    #dictionaries where the key is the temp of the fluid in F and the definition is a 2D array of values
+    #in this 2D array of values, x is the thickness of calcium silicate (insulation) in inches and y is the surface temp of the jacket in F
+    temps_arr = TEMPS_ARR #list of temperatures to use for iterating through the dictionaries
+
+    dict_emiss_shiny = {} #emissivity 0.09 shiny metal jacket
+    for p in INS_THICKNESS_ARR:
+        for t in temps_arr:
+            calcs_arr = []
+            count = 0
+            for n in INS_THICKNESS_ARR:
+                calcs_arr.append(calc_surf_temp(EMISS_SHINY, n, t))
+                count += 1
+            dict_emiss_shiny[t] = np.array([INS_THICKNESS_ARR,np.array(calcs_arr)])
+
+    dict_emiss_matte = {} #emissivity 0.9 matte black metal jacket
+    for p in INS_THICKNESS_ARR:
+        for t in temps_arr:
+            calcs_arr = []
+            count = 0
+            for n in INS_THICKNESS_ARR:
+                calcs_arr.append(calc_surf_temp(EMISS_CLOTH, n, t))
+                count += 1
+            dict_emiss_matte[t] = np.array([INS_THICKNESS_ARR,np.array(calcs_arr)])
+    
+    #plotting the data:
+    plt.figure(figsize=(4.7,8))
+    plt.xlim((0,8))
+
+    for t in temps_arr:
+        data1 = dict_emiss_shiny[t]
+        line1, = plt.plot(data1[0], data1[1], c="b", ls="-", lw=1.5, marker="s", markersize=5)
+    line1.set_label("Shiny metal jacket\n(emissivity 0.09)")
+    
+    for t in temps_arr:
+        data2 = dict_emiss_matte[t]
+        line2, = plt.plot(data2[0], data2[1], c="r", ls="-", lw=1.5, marker="o", markersize=5)
+    line2.set_label("Matte black metal jacket\n(emissivity 0.9)")
+
+    #plotting 113 F and 140 F lines
+    plt.axhline(y=113, color="gray", linestyle="--")
+    plt.axhline(y=140, color="gray", linestyle="--")
+
+    #temperature annotations
+    #annotations are found by x of the annotation=x-1.25 and y of the annotation=y-2
+    for t in temps_arr:
+        plt.annotate(str(t) + " F", (INS_THICKNESS_ARR[0]-1.25,dict_emiss_shiny[t][1][0]-2), c="b")
+    for t in temps_arr:
+        plt.annotate(str(t) + " F", (INS_THICKNESS_ARR[0]-1.25,dict_emiss_matte[t][1][0]-2), c="r")
+    plt.annotate("113 F", (0.25, 106), c="gray")
+    plt.annotate("140 F", (0.25, 133), c="gray")
+
+    #plot title and x and y labels
+    plt.title("Affect of insulation thickness on surface\ntemperature for various emissivities\nand flow temperatures")
+    plt.xlabel("Thickness of calcium silicate insulation\non a 20 in diameter pipe (in)")
+    plt.ylabel("Surface temperature of jacket (F)")
+
+    #plot
+    plt.legend()
+    plt.show()
 
 
 
@@ -119,10 +180,15 @@ def calc_rad_coeff(d2, e, o, T3):
 
 def main():
     #PART A
-    calc_surf_temp(EMISS_SHINY)
-    calc_surf_temp(EMISS_CLOTH)
-
+    #specific required calculations for part a
+    t1 = calc_surf_temp(EMISS_SHINY, INS_THICKNESS_ARR[0], TEMPS_ARR[3])
+    t2 = calc_surf_temp(EMISS_CLOTH, INS_THICKNESS_ARR[0], TEMPS_ARR[3])
+    #required print statements for part a
+    print("Fluid temperature = " + str(TEMPS_ARR[3]) + " F | Pipe OD = " + str(PIPE_OD) + " in | Insulation thickness " + str(INS_THICKNESS_ARR[0]) + " in = | Jacket emissivity = " + str(EMISS_SHINY) + " | Outer temperature = " + str(round(t1, 2)) + " F\n")
+    print("Fluid temperature = " + str(TEMPS_ARR[3]) + " F | Pipe OD = " + str(PIPE_OD) + " in | Insulation thickness " + str(INS_THICKNESS_ARR[0]) + " in = | Jacket emissivity = " + str(EMISS_CLOTH) + " | Outer temperature = " + str(round(t2, 2)) + " F\n")
+    
     #PART B
+    full_dataplot()
 
     #PART C
 
