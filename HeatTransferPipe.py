@@ -22,6 +22,7 @@ SB_CONST = 0.00000000171 #Stefan-Boltzmann constant in BTU/(h*ft^2*R^4)
 INS_THICKNESS_ARR = [2, 3, 4, 5, 6, 7, 8] #insulation thickness cases to consider in inches
 SAFETEMP_METAL = 140 #safe-to-touch temperature for shiny metal jacket in F
 SAFETEMP_CANVAS = 113 #safe-to-touch temperature for canvas jacket in F
+PI = 3.14159
 
 
 
@@ -57,7 +58,6 @@ def calc_surf_temp(emiss, ins, fl_temp):
     
     #solve the equation
     T2 = solve_eqn(coeff_nums[0], coeff_nums[1], coeff_nums[2], coeff_nums[3], coeff_nums[4], conv_coeff, temp_enviro_F, fluid_temp_F)
-    
     return T2 #return statement
 
 #simple binary search algorithm to solve for the temperature
@@ -108,7 +108,7 @@ def calc_rad_coeff(d2, e, o, T3):
 
 #---------------------------- PART B --------------------------------------------
 
-def full_dataplot():
+def dataplot():
     #dictionaries where the key is the temp of the fluid in F and the definition is a 2D array of values
     #in this 2D array of values, x is the thickness of calcium silicate (insulation) in inches and y is the surface temp of the jacket in F
     temps_arr = TEMPS_ARR #list of temperatures to use for iterating through the dictionaries
@@ -123,7 +123,7 @@ def full_dataplot():
                 count += 1
             dict_emiss_shiny[t] = np.array([INS_THICKNESS_ARR,np.array(calcs_arr)])
 
-    dict_emiss_matte = {} #emissivity 0.9 matte black metal jacket
+    dict_emiss_matte = {} #emissivity 0.9 matte black jacket
     for p in INS_THICKNESS_ARR:
         for t in temps_arr:
             calcs_arr = []
@@ -145,7 +145,7 @@ def full_dataplot():
     for t in temps_arr:
         data2 = dict_emiss_matte[t]
         line2, = plt.plot(data2[0], data2[1], c="r", ls="-", lw=1.5, marker="o", markersize=5)
-    line2.set_label("Matte black metal jacket\n(emissivity 0.9)")
+    line2.set_label("Matte black jacket\n(emissivity 0.9)")
 
     #plotting 113 F and 140 F lines
     plt.axhline(y=113, color="gray", linestyle="--")
@@ -173,6 +173,80 @@ def full_dataplot():
 
 #---------------------------- PART C ------------------------------------------
 
+def barplots():
+    temps_arr = TEMPS_ARR #list of temperatures
+    
+    #dictionaries where the key is the temp of the fluid in F and the definition is a 2D array of values
+    #in this 2D array of values, x is the thickness of calcium silicate (insulation) in inches and y is the surface temp of the jacket in F
+    dict_emiss_shiny = {} #emissivity 0.09 shiny metal jacket
+    for p in INS_THICKNESS_ARR:
+        for t in temps_arr:
+            calcs_arr = []
+            count = 0
+            for n in INS_THICKNESS_ARR:
+                calcs_arr.append(calc_surf_temp(EMISS_SHINY, n, t))
+                count += 1
+            dict_emiss_shiny[t] = np.array([INS_THICKNESS_ARR,np.array(calcs_arr)])
+
+    dict_emiss_matte = {} #emissivity 0.9 matte black jacket
+    for p in INS_THICKNESS_ARR:
+        for t in temps_arr:
+            calcs_arr = []
+            count = 0
+            for n in INS_THICKNESS_ARR:
+                calcs_arr.append(calc_surf_temp(EMISS_CLOTH, n, t))
+                count += 1
+            dict_emiss_matte[t] = np.array([INS_THICKNESS_ARR,np.array(calcs_arr)])
+
+    #explanation here
+    temp_dict = {}
+    emiss_arr = [EMISS_SHINY, EMISS_CLOTH]
+    for t in temps_arr:
+        for i in INS_THICKNESS_ARR:
+            q_conv_arr = []
+            q_rad_arr = []
+            for e in emiss_arr:
+                outer_temp = calc_surf_temp(e, i, t)
+                q_conv = calc_q_conv(outer_temp,i)
+                q_rad = calc_q_rad(outer_temp,i,e)
+                arr = np.array([q_conv, q_rad, (q_conv + q_rad)])
+                b = str(str(t) + "," + str(e) + "," + str(i))
+                temp_dict[b] = arr #three values in the array: [q_conv, q_rad, sum]
+
+    #plot data
+    for t in temps_arr:
+        plt.figure(figsize=(6.5,8))
+        x_axis = np.arange(len(INS_THICKNESS_ARR))
+        for i in INS_THICKNESS_ARR:
+            b1 = str(str(t) + "," + str(emiss_arr[0]) + "," + str(i))
+            arr1 = temp_dict[b1]
+            b2 = str(str(t) + "," + str(emiss_arr[1]) + "," + str(i))
+            arr2 = temp_dict[b2]
+            barcolor1, = plt.bar(i-0.2, arr1[2], 0.4, color="b", edgecolor="black", linewidth=1) #q_rad plot for shiny emiss 0.09
+            barcolor2, = plt.bar(i-0.2, arr1[0], 0.4, color="r", edgecolor="black", linewidth=1) #q_conv plot for shiny emiss 0.09
+            barcolor3, = plt.bar(i+0.2, arr2[2], 0.4, color="green", edgecolor="black", linewidth=1) #q_rad plot for matte emiss 0.9
+            barcolor4, = plt.bar(i+0.2, arr2[0], 0.4, color="cyan", edgecolor="black", linewidth=1) #q_conv plot for matte emiss 0.9
+            plt.title("Affect of insulation thickness on pipe surface\ntemperature for different emissivities\nat an internal flow temperature of " + str(t) + " F")
+            plt.xlabel("Insulation thickness (in)")
+            plt.ylabel("Heat rate (BTU/h)")
+        barcolor2.set_label("Q_conv for ε = 0.09")
+        barcolor1.set_label("Q_rad for ε = 0.09")
+        barcolor4.set_label("Q_conv for ε = 0.9")
+        barcolor3.set_label("Q_rad for ε = 0.9")
+        plt.legend()
+        plt.show()
+
+
+
+#method to calculate the Q of convection
+def calc_q_conv(t, thick):
+    d2 = (PIPE_OD/12) + (2*(thick/12))
+    return 0.27*PI*(math.pow(d2, 0.75))*(math.pow((t-TEMP_ENVIRO), 1.25))
+
+#method to calculate the Q of radiation
+def calc_q_rad(t, thick, emiss):
+    d2 = (PIPE_OD/12) + (2*(thick/12))
+    return PI*d2*emiss*SB_CONST*((math.pow((t+459.67),4) - math.pow((TEMP_ENVIRO+459.67),4)))
 
 
 
@@ -188,8 +262,9 @@ def main():
     print("Fluid temperature = " + str(TEMPS_ARR[3]) + " F | Pipe OD = " + str(PIPE_OD) + " in | Insulation thickness " + str(INS_THICKNESS_ARR[0]) + " in = | Jacket emissivity = " + str(EMISS_CLOTH) + " | Outer temperature = " + str(round(t2, 2)) + " F\n")
     
     #PART B
-    full_dataplot()
+    dataplot()
 
     #PART C
+    barplots()
 
 main()
